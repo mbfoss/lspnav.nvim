@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+# Record the README demo from demo/*.scene with nvim-demo.
+#
+#   scripts/demo.sh                 # every scene
+#   scripts/demo.sh demo/demo.scene # just one
+#
+# Each scene writes its GIF and cast to demo/out/. Needs nvim, agg, pyte, and
+# clangd (for demo/sample.c). nvim-demo is cloned into
+# $XDG_CACHE_HOME/lspnav.nvim/nvim-demo-tool when it is not installed. Set
+# NVIM_DEMO to a checkout's bin/nvim-demo to use that instead.
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+if [ -n "${NVIM_DEMO:-}" ]; then
+    demo=$NVIM_DEMO
+else
+    tool=${XDG_CACHE_HOME:-$HOME/.cache}/lspnav.nvim/nvim-demo-tool
+    demo=$tool/bin/nvim-demo
+    if [ ! -x "$demo" ]; then
+        mkdir -p "${tool%/*}"
+        git clone --depth 1 https://github.com/mbfoss/nvim-demo-tool "$tool"
+    fi
+fi
+
+if [ "$#" -eq 0 ]; then
+    set -- "$root"/demo/*.scene
+fi
+
+for scene in "$@"; do
+    printf '=== %s\n' "$(basename "$scene")"
+    "$demo" record "$scene"
+done

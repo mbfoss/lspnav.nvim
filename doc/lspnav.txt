@@ -1,0 +1,382 @@
+*lspnav*                     LSP navigation and exploration windows for Neovim
+
+==============================================================================
+Table of Contents                                   *lspnav-table-of-contents*
+
+1. Installation                                          |lspnav-installation|
+2. Configuration                                        |lspnav-configuration|
+3. Features                                                  |lspnav-features|
+  - Side windows                                         |lspnav-side-windows|
+  - Motions                                                   |lspnav-motions|
+  - Symbol tree                                            |lspnav-symboltree|
+  - Call tree                                                |lspnav-calltree|
+  - References                                             |lspnav-references|
+4. Commands                                                  |lspnav-commands|
+5. Health                                                      |lspnav-health|
+6. License                                                    |lspnav-license|
+LSP navigation for Neovim: motions between definitions, plus side windows for
+document symbols, call hierarchy, and references.
+
+**Requires Neovim >= 0.11. No other dependencies.**
+
+
+==============================================================================
+1. Installation                                          *lspnav-installation*
+
+Neovim >= 0.12:
+
+>lua
+    vim.pack.add({ "https://github.com/mbfoss/lspnav.nvim" })
+<
+
+Other plugin managers work too; the repository is `mbfoss/lspnav.nvim`.
+
+With lazy.nvim, load the plugin at startup so `plugin/lspnav.lua` registers
+`:Lspnav`:
+
+>lua
+    {
+      "mbfoss/lspnav.nvim",
+      lazy = false,
+      opts = {}, -- option overrides
+    }
+<
+
+
+==============================================================================
+2. Configuration                                        *lspnav-configuration*
+
+`setup()` is optional. It takes one table keyed by feature name; each value is
+that feature’s options table, and omitted options keep their defaults.
+
+>lua
+    require("lspnav").setup({
+      motions    = { function_kinds = { 6, 9, 12 } },
+      symboltree = { width_ratio = 0.2 },
+    })
+<
+
+Options merge into the defaults, except lists, which replace the default
+outright. A feature can also be configured on its own:
+`require("lspnav.symboltree").setup({ ... })`.
+
+Each feature’s options are listed below with their defaults. Every feature
+works without `setup()`.
+
+
+==============================================================================
+3. Features                                                  *lspnav-features*
+
+- |lspnav-motions| Motions to the next and previous function or type
+- |lspnav-symboltree| Document symbols of the current buffer
+- |lspnav-calltree| Callers or callees of the symbol under the cursor
+- |lspnav-references| References to the symbol under the cursor
+
+
+SIDE WINDOWS                                             *lspnav-side-windows*
+
+The three windows share their opening rules:
+
+- `:Lspnav <feature>` opens the window and moves focus into it.
+- `:Lspnav <feature> open` opens it without moving focus.
+- `:Lspnav <feature> toggle` closes it when visible, otherwise opens it.
+- Each asks the first attached client that serves its LSP method. With several
+    servers attached, symbols known only to the second server are not shown.
+- `LspnavIndentGuide` (`default` link to `NonText`) colors indent guides in
+    every window; `LspnavReferencesSymbol` (`default` link to `Label`) colors the
+    matched name in references. Override either group to recolor it.
+
+The call tree and references open as a floating bar across the bottom of the
+editor and close on `<Esc>` or when focus returns to a regular window. Set
+`display = "split"` in either feature’s options to use a split instead. Press
+`<C-q>` in a float to move it into a split, keeping its contents. The float
+always spans the editor and uses `height_ratio`; the split uses `position`,
+plus `width_ratio` for left/right and `height_ratio` for top/bottom.
+
+
+MOTIONS                                                       *lspnav-motions*
+
+Motions to the next and previous function or type. Stops come from the
+server’s `textDocument/documentSymbol` tree, so nested and local definitions
+are included. The server’s `SymbolKind` decides what counts; line text is not
+pattern-matched.
+
+>lua
+    require("lspnav").setup({
+      motions = {
+        function_kinds = { 6, 9, 12 },            -- Method, Constructor, Function
+        type_kinds     = { 2, 3, 5, 10, 11, 23 }, -- Module, Namespace, Class,
+                                                  -- Enum, Interface, Struct
+      },
+    })
+<
+
+Each list replaces its default outright.
+
+  -----------------------------------------------------------------------
+  Action                              Stops on
+  ----------------------------------- -----------------------------------
+  next_function / prev_function       Method, Constructor, Function
+
+  next_type / prev_type               Module, Namespace, Class, Enum,
+                                      Interface, Struct
+  -----------------------------------------------------------------------
+Each action takes `(bufnr?, count?)`: `bufnr` defaults to the current buffer
+and `count` to `vim.v.count1`, so mappings with a count work unchanged.
+
+>lua
+    for lhs, action in pairs({
+      ["]f"] = "next_function",
+      ["[f"] = "prev_function",
+      ["]c"] = "next_type",
+      ["[c"] = "prev_type",
+    }) do
+      vim.keymap.set("n", lhs, function()
+        require("lspnav.motions")[action]()
+      end, { desc = "lspnav.motions" })
+    end
+<
+
+`jump(direction, kinds, bufnr?, count?)` accepts a custom kind list:
+
+>lua
+    require("lspnav.motions").jump("next", { 5, 11 }) -- next class or interface
+<
+
+The four actions are also `:Lspnav` subcommands taking an optional count
+(default 1). The module itself sets no mappings or autocommands.
+
+Behavior:
+
+- Stops compare line and column, so two definitions on one line stay distinct.
+- A symbol the cursor already sits on counts as neither direction, so a repeat
+    press moves past it.
+- A count past the end stops at the last stop.
+- At either end, or with no capable client attached, nothing happens and no
+    message appears.
+
+
+SYMBOL TREE                                                *lspnav-symboltree*
+
+A side window showing the current buffer’s document symbols. It refreshes as
+you edit, and `track_cursor` highlights the symbol under the cursor.
+
+>lua
+    require("lspnav").setup({
+      symboltree = {
+        width_ratio      = 0.2,   -- fraction of the editor width
+        track_cursor     = true,  -- highlight the symbol under the cursor
+        auto_expand      = true,  -- expand every symbol on load
+        show_detail      = true,  -- show the server-provided detail text
+        exclude_kinds    = nil,   -- LSP symbol kind names to hide, e.g. { "Variable" }
+        collapse_kinds   = { "Function", "Method", "Object" },
+                                  -- kinds left collapsed on load even with auto_expand
+        debounce_ms      = 500,   -- edit-to-refresh delay
+        max_cached_folds = 2048,  -- folds remembered across all buffers
+        indent_guides    = false, -- draw vertical indent guides
+      },
+    })
+<
+
+`exclude_kinds` and `collapse_kinds` replace their defaults outright.
+
+  Command                     Action
+  --------------------------- -------------------------------------
+  :Lspnav symboltree          Open and move focus into the window
+  :Lspnav symboltree open     Open without moving focus
+  :Lspnav symboltree close    Close the window
+  :Lspnav symboltree toggle   Open, or close if already showing
+Inside the window, `g?` lists the keys.
+
+  -----------------------------------------------------------------------
+  Key                                 Action
+  ----------------------------------- -----------------------------------
+  <CR>                                Expand or collapse; on a leaf, jump
+                                      to the symbol and focus the source
+
+  o / O                               Jump to the symbol (O also moves
+                                      focus there)
+
+  za / zc / zo                        Toggle / collapse / expand
+
+  zC / zO                             Collapse / expand recursively
+
+  K                                   Hover info for the symbol
+
+  R                                   Refresh
+  -----------------------------------------------------------------------
+
+CALL TREE                                                    *lspnav-calltree*
+
+A side window showing the call hierarchy of the symbol under the cursor: its
+callers (_incoming_, the default) or its callees (_outgoing_). Levels are
+fetched when a node is expanded. A function that reaches itself is marked `↺`
+and left as a leaf.
+
+>lua
+    require("lspnav").setup({
+      calltree = {
+        display          = "float",    -- "float" (bottom bar) or "split"
+        width_ratio      = 0.2,        -- split only: fraction of the editor width
+                                       -- (left/right)
+        height_ratio     = 0.25,       -- fraction of the editor height (float and
+                                       -- top/bottom split)
+        position         = "bottom",   -- split only: side the window opens on
+                                       -- ("top"|"bottom"|"left"|"right")
+        direction        = "incoming", -- which way to walk ("incoming"|"outgoing")
+        show_detail      = true,       -- show the server-provided detail text
+        auto_expand_root = true,       -- expand the root as soon as it resolves
+        indent_guides    = false,      -- draw vertical indent guides
+      },
+    })
+<
+
+Run `:Lspnav calltree` on the symbol to inspect. It builds the tree and moves
+focus into the window. Running it again from a source window re-roots the tree
+at that cursor position.
+
+  Argument              Action
+  --------------------- -----------------------------------------------
+  (none)                Build the tree and move focus into the window
+  open                  Build the tree without moving focus
+  incoming / outgoing   Same as (none), forcing a direction
+  swap                  Flip direction, keeping the current root
+  refresh               Re-fetch everything from the current root
+  toggle                Open, or close if already showing
+  close                 Close the window
+Inside the window, `g?` lists the keys.
+
+  Key         Action
+  ----------- ------------------------------------------------------
+  <CR> / za   Expand or collapse; on a leaf, jump to the call site
+  o / O       Jump to the call site (O also moves focus there)
+  K           Hover info (kind, location, call sites)
+  <Tab>       Swap direction
+  r           Re-root on the symbol under the cursor
+  <BS>        Back to the previous root
+  R           Refresh
+  <C-q>       Move the float to a split
+  <Esc>       Close the float
+The root row is labeled `CALLERS` for incoming calls and `CALLS` for outgoing
+calls.
+
+
+REFERENCES                                                 *lspnav-references*
+
+A side window listing every reference to the symbol under the cursor. The tree
+view compacts chains of folders that contain no files (`lua/lspnav/`), while
+folders with files or branches stay nested. `<Tab>` switches to a flat list of
+file headings. The server returns the whole list in one reply, so folding only
+hides rows that are already rendered.
+
+The root row names the symbol under the cursor, followed by how many references
+were found. A `Location` carries no name, so each row under it shows its line
+followed by the source line. References on the same line share one row, with
+every occurrence highlighted in the source line. That line comes from the
+buffer when the document is open, including unsaved edits, and from disk
+otherwise.
+
+>lua
+    require("lspnav").setup({
+      references = {
+        display             = "float",  -- "float" (bottom bar) or "split"
+        width_ratio         = 0.2,      -- split only: fraction of the editor width
+                                        -- (left/right)
+        height_ratio        = 0.25,     -- fraction of the editor height (float and
+                                        -- top/bottom split)
+        position            = "bottom", -- split only: side the window opens on
+                                        -- ("top"|"bottom"|"left"|"right")
+        include_declaration = true,     -- count the declaration itself as a reference
+        show_line           = true,     -- show the source line each reference sits on
+        view                = "tree",   -- default view: "tree" or "flat"
+        auto_expand         = true,     -- expand every folder and file as soon as it resolves
+        indent_guides       = false,    -- draw vertical indent guides
+      },
+    })
+<
+
+Run `:Lspnav references` on the symbol to inspect. It builds the list and moves
+focus into the window. Running it again from a source window re-queries that
+cursor position.
+
+  -----------------------------------------------------------------------
+  Argument                            Action
+  ----------------------------------- -----------------------------------
+  (none)                              Build the list and move focus into
+                                      the window
+
+  open                                Build the list without moving focus
+
+  refresh                             Ask the server again, from the
+                                      buffer the query came from
+
+  toggle                              Open, or close if already showing
+
+  close                               Close the window
+  -----------------------------------------------------------------------
+Inside the window, `g?` lists the keys.
+
+  -----------------------------------------------------------------------
+  Key                                 Action
+  ----------------------------------- -----------------------------------
+  <CR> / za                           Expand or collapse a folder or
+                                      file; on a reference, jump to it
+
+  <Tab>                               Switch between tree and flat views
+
+  o / O                               Jump to the reference (O also moves
+                                      focus there)
+
+  K                                   Hover info (file, line, source
+                                      line)
+
+  R                                   Ask the server again
+
+  <C-q>                               Move the float to a split
+
+  <Esc>                               Close the float
+  -----------------------------------------------------------------------
+The first row names the symbol under the cursor, plus the number of references
+returned. While the server reports background work over LSP work-done progress
+(clangd indexing, rust-analyzer indexing, gopls workspace setup), that row ends
+with `(may be incomplete)`, and an empty result says so as well. The list does
+not refresh itself; press `R` when the work finishes. Servers that report no
+progress never show the marker, so its absence does not guarantee completeness.
+
+
+==============================================================================
+4. Commands                                                  *lspnav-commands*
+
+`:Lspnav` is registered at startup without loading Lua. Each subcommand loads
+its feature on first use, so the command works from a bare install.
+
+- `:Lspnav next_function` |lspnav-motions| Move to the next function
+- `:Lspnav prev_function` |lspnav-motions| Move to the previous function
+- `:Lspnav next_type` |lspnav-motions| Move to the next type
+- `:Lspnav prev_type` |lspnav-motions| Move to the previous type
+- `:Lspnav symboltree` |lspnav-symboltree| Show the document symbols
+- `:Lspnav calltree` |lspnav-calltree| Show the call hierarchy
+- `:Lspnav references` |lspnav-references| Show the references
+
+
+==============================================================================
+5. Health                                                      *lspnav-health*
+
+>vim
+    :checkhealth lspnav
+<
+
+Reports the Neovim version and every configured feature whose options differ
+from their defaults, listing only the changed options. An unrecognized option
+name is reported as a warning. Features left at their defaults, and features
+never loaded, are omitted.
+
+
+==============================================================================
+6. License                                                    *lspnav-license*
+
+MIT. See LICENSE and ATTRIBUTIONS.md in the repository for third-party credits.
+
+Generated by panvimdoc <https://github.com/kdheepak/panvimdoc>
+
+vim:tw=78:ts=8:noet:ft=help:norl:

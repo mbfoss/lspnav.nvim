@@ -1,0 +1,52 @@
+# Records the README demo with nvim-demo:
+#   https://github.com/mbfoss/nvim-demo-tool
+# Run scripts/demo.sh, or `nvim-demo record demo/demo.scene`.
+size 110x34
+init init.lua
+cwd .
+out out/lspnav.gif
+cast out/lspnav.cast
+
+font-size 16
+line-height 1.19
+fps 20
+
+keycast on
+keycast-width 30
+
+caption lspnav.nvim  ·  LSP navigation for Neovim
+sleep 600ms
+
+# Document outline: find a symbol in the tree and jump to it.
+key :Lspnav symboltree<CR>
+wait is_space\s+int
+sleep 600ms
+key /farewell<CR>
+sleep 400ms
+key <CR>
+sleep 700ms
+
+# References for the helper at the cursor.
+key /normalize<CR>
+key :nohlsearch<CR>
+sleep 400ms
+key :Lspnav references<CR>
+wait References
+sleep 900ms
+key <Tab>
+sleep 600ms
+key <Esc>
+sleep 400ms
+
+# Call hierarchy: incoming callers, then flip to outgoing calls.
+key :Lspnav calltree<CR>
+wait CALLERS
+sleep 900ms
+key j
+key <CR>
+sleep 700ms
+key <Tab>
+wait CALLS
+sleep 800ms
+key <Esc>
+sleep 600ms
