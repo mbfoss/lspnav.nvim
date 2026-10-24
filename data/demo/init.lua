@@ -16,7 +16,7 @@ vim.o.shortmess = vim.o.shortmess .. "I"
 require("nvim_demo").setup()
 
 local demo_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h")
-vim.opt.rtp:append(demo_dir .. "/..")
+vim.opt.rtp:append(demo_dir .. "/../..")
 
 -- A little wider than the default so symbol names and details are readable.
 require("lspnav").setup({

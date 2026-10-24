@@ -49,4 +49,4 @@ tasks.toml
 .luarc.json
 
 # Generated demo recordings
-demo/out/
+data/demo/out/

@@ -1,6 +1,6 @@
 # Records the README demo with nvim-demo:
 #   https://github.com/mbfoss/nvim-demo-tool
-# Run scripts/demo.sh, or `nvim-demo record demo/demo.scene`.
+# Run scripts/demo.sh, or `nvim-demo record data/demo/demo.scene`.
 size 110x34
 init init.lua
 cwd .

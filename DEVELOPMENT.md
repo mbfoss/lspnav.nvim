@@ -33,25 +33,25 @@ that puts the plugin on the runtimepath.
 ## Demo
 
 The GIF at the top of the README is recorded from
-[`demo/demo.scene`](demo/demo.scene) with
+[`data/demo/demo.scene`](data/demo/demo.scene) with
 [nvim-demo](https://github.com/mbfoss/nvim-demo-tool). The scene drives a
-scripted Neovim session against [`demo/sample.c`](demo/sample.c), which clangd
+scripted Neovim session against [`data/demo/sample.c`](data/demo/sample.c), which clangd
 indexes so the symbol tree, references, and call hierarchy all have data.
 
 ```bash
-scripts/demo.sh                      # every demo/*.scene
-scripts/demo.sh demo/demo.scene      # one scene
+scripts/demo.sh                      # every data/demo/*.scene
+scripts/demo.sh data/demo/demo.scene      # one scene
 ```
 
 The script clones nvim-demo into
 `${XDG_CACHE_HOME:-~/.cache}/lspnav.nvim/nvim-demo-tool` when it is not
 installed; set `NVIM_DEMO` to a checkout's `bin/nvim-demo` to use that instead.
 It needs Neovim, agg, pyte, and clangd, and writes the GIF and cast to
-`demo/out/` (ignored by Git).
+`data/demo/out/` (ignored by Git).
 
 The rendered GIF lives on the orphan `assets` branch at its root, and the
 README links to the raw file there. After re-recording, copy
-`demo/out/lspnav.gif` over `lspnav.gif` on `assets` and push that branch.
+`data/demo/out/lspnav.gif` over `lspnav.gif` on `assets` and push that branch.
 
 ## Architecture
 
